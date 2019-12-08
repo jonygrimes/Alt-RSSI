@@ -89,14 +89,14 @@ def findFile():
   wait = True
   
   while True:
-    if not os.path.exists('files/scan-30.csv'):
+    if not os.path.exists('files/scan-total.csv'):
       if wait:
         print "This script is supposed to be run after the first 30 inputs from the scan.py script have been generated\nPlease wait while the system finds the file.\nWaiting"
         wait = False
       else: print ".",
       time.sleep(0.5)
     else:
-      if sum(1 for line in open('files/scan-30.csv')) >= 30: return
+      if sum(1 for line in open('files/scan-total.csv')) >= 30: return
       else:
         if wait:
           print "This script is supposed to be run after the first 30 inputs from the scan.py script have been generated\nPlease wait while the system finds the file.\nWaiting"
@@ -118,6 +118,7 @@ detectionPhaseDict = dict()
 # Common Functionality
 #-=-=-=-=-=-=-=-=-=-
 def loadNormalProfile():
+  global normalProfile, learningPhaseDict, learningPhaseDict
   with open("files/normalProfile.cPickle", "rb") as backupFile:
     d = cPickle.load(backupFile)
     normalProfile, learningPhaseDict, learningPhaseDict = d[0],d[1],d[2]
@@ -371,7 +372,8 @@ def learningPhase():
         timestamp=[]
         
         for sample in r:
-          ''' sample[0] := Set, [1] := Clock, [2] := Antenna Strength, [3] := Client RSSI ''' 
+          ''' sample[0] := Set, [1] := Clock, [2] := Antenna Strength, [3] := Client RSSI, [4] := IfAttackPresent ''' 
+          # [4] only for actual validation of tool
           
           # If you have seen this value before, then don't look at it anymore
           if latestClock > float(sample[1]):
@@ -546,11 +548,35 @@ def detectionPhase():
   
   totalIterations = 4
   detectionPhaseDict = dict()
+  contLearn = dict()
   
   for system in ["Intra", "Inter", "Corr", "Clust"]:
       detectionPhaseDict[system] = dict()
       detectionPhaseDict[system]["score"] = dict()
-  
+      contLearn[system] = dict()
+      contLearn[system]["score"] = dict()
+      contLearn[system]["score"]["pos"] = dict()
+      contLearn[system]["score"]["neg"] = []
+      for i in ["pos"]:
+        if system == "Intra":
+          for a in [0,1,2]:
+            contLearn[system]["score"][i][a] = []
+        if system in ["Inter","Corr"]:
+          for b in range(len(learningPhaseDict[system]["score"])):
+            contLearn[system]["score"][i][b] = dict()
+            for a in [0,1,2]:
+              contLearn[system]["score"][i][b][a] = []
+        if system in ["Clust"]:
+          for c in range(len(learningPhaseDict[system]["score"])):
+            contLearn[system]["score"][i][c] = dict()
+            for b in [0,1,2]:
+              contLearn[system]["score"][i][c][b] = dict()
+              for a in range(len(learningPhaseDict[system]["score"][c][b])):
+                contLearn[system]["score"][i][c][b][a] = []
+      
+  contLearn["hist"]=[0,3] # [LastLine reached, attack present (unkown=3)]
+
+  line_count = 0
   while True:
 
   
@@ -560,8 +586,10 @@ def detectionPhase():
         normalProfile[Phase][system][key] = dict()
         
     timestampsCollected=0
+    contLearn["hist"][1] = 3
+    
   
-    while timestampsCollected < 40 : # Gather 120 timestamps
+    while timestampsCollected < 40 : # Gather 120 Samples
     
       with open('files/scan-total.csv') as csv_file:
         r = csv.reader(csv_file,delimiter=',',quotechar='\'',quoting=csv.QUOTE_MINIMAL)
@@ -569,7 +597,8 @@ def detectionPhase():
         timestamp=[]
         
         for sample in r:
-          ''' sample[0] := Set, [1] := Clock, [2] := Antenna Strength, [3] := Client RSSI ''' 
+          ''' sample[0] := Set, [1] := Clock, [2] := Antenna Strength, [3] := Client RSSI, [4] := IfAttackPresent ''' 
+          # [4] only for actual validation of tool
           
           # If you have seen this value before, then don't look at it anymore
           if latestClock > float(sample[1]):
@@ -577,7 +606,16 @@ def detectionPhase():
             continue
           if timestampsCollected >= 40:
             continue
+          contLearn["hist"][0] += 1
           
+          if len(sample)>3:
+            if sample[4] == "1":
+              contLearn["hist"][1] = 1
+            elif not contLearn["hist"][1] == 1:
+              if sample[4] == "0":
+                contLearn["hist"][1] = 0
+          
+          line_count += 1
           latestLine += 1
           latestClock = float(sample[1])
           
@@ -620,29 +658,17 @@ def detectionPhase():
   
     print "-=-=-=-=-=-=-=-=-=-=-=-=-=-"
     
-    num_of_alarms = 0.0
+    num_of_warns = 0.0
     
+    
+    contnTempt = dict()
     for system in ["Intra", "Inter", "Corr", "Clust"]:
       detc = detectionPhaseDict[system]
-      lern = learningPhaseDict[system]["score"]
+      lern = learningPhaseDict[system]["score"]     
+      cont = contLearn[system]["score"]
+      contnTempt[system] = []
+      contn = contnTempt[system]
       
-      # if system == "Intra":
-        # for b in [0]
-        # for a in [0,1,2]:
-        # detc = detc[a]
-      
-      # if system in ["Inter","Corr"]:
-        # for b in range(len(lern)):
-        # for a in [0,1,2]:
-        # detc = detc[b][a]
-        
-      # if system == "Clust":
-        # for c in range(len(lern)):
-        # for b in [0,1,2]:
-        # for a in range(len(detc[c][b])):
-        # detc = detc[c][b][a]
-      
-
       if system == "Intra":
         # [Q1,Median,Q3]                 <-- Intra
         for a in [0,1,2]:
@@ -652,30 +678,52 @@ def detectionPhase():
               # print "Completely Fine!"
               pass
             else:
+              cont["pos"][a].append(detc[a])
+              if len(cont["pos"][a]) > 4:
+                q1,med,q3 = find_quarts(cont["pos"][a])
+                if detc[a] >= q1 and detc[a] <= q3:
+                  continue
+              
               # Outside of "Normal" Data (But nothing to be alarmed about)
               print "[Warning] "+ system +": Potential to be anomaly"
-              num_of_alarms += 0.25
+              num_of_warns += 0.25
           else:
-            num_of_alarms += 1
-            print("[Alarm] "+ system + ": out of bounds has been triggered." + str(detc[a]) + " is outside range of [" + str(lern['Q1_min'] -2) +","+ str(lern['Q3_max']+2) + "]")
+            contn.append(detc[a])
+            if len(cont["neg"]) > 4:
+              q1,med,q3 = find_quarts(cont["neg"])
+              if detc[a] >= q1 and detc[a] <= q3:
+                continue
+
+            num_of_warns += 1
+            print("[Warning] "+ system + ": out of bounds has been triggered." + str(detc[a]) + " is outside range of [" + str(lern['Q1_min'] -2) +","+ str(lern['Q3_max']+2) + "]")
             
       if system in ["Inter","Corr"]:
         # [[Q1,Median,Q3] * # of perm ]  <-- Inter
         # [[Q1,Median,Q3] * # of dBm  ]  <-- Corr
         for b in range(len(lern)):
-                
+          
           for a in [0,1,2]:
             if detc[b][a] >= lern[b]["Q1_min"]-2 and detc[b][a]  <= lern[b]["Q3_max"]+2:
               if detc[b][a]  <= (lern[b]["Med_avg"] + (lern[b]["Q3_max"] - lern[b]["Q1_min"])*1.0/2.0)+1 and detc[b][a]  >= (lern[b]["Med_avg"] - (lern[b]["Q3_max"] - lern[b]["Q1_min"])*1.0/2.0)-1:
                 # print "Completely Fine!"
                 pass
               else:
+                cont["pos"][b][a].append(detc[b][a])
+                if len(cont["pos"][b][a]) > 5:
+                  q1,med,q3 = find_quarts(cont["pos"][b][a])
+                  if detc[b][a] >= q1 and detc[b][a] <= q3:
+                    continue
                 # Outside of "Normal" Data (But nothing to be alarmed about)
                 print "[Warning] "+ system +": Potential to be anomaly"
-                num_of_alarms += 0.25
+                num_of_warns += 0.25
             else:
-              num_of_alarms += 1
-              print("[Alarm] "+ system + ": out of bounds has been triggered." + str(detc[b][a]) + " is outside range of [" + str(lern[b]['Q1_min'] -2) +","+ str(lern[b]['Q3_max']+2) + "]")
+              contn.append(detc[b][a])
+              if len(cont["neg"]) > 4:
+                q1,med,q3 = find_quarts(cont["neg"])
+                if detc[a] >= q1 and detc[a] <= q3:
+                  continue
+              num_of_warns += 1
+              print("[Warning] "+ system + ": out of bounds has been triggered." + str(detc[b][a]) + " is outside range of [" + str(lern[b]['Q1_min'] -2) +","+ str(lern[b]['Q3_max']+2) + "]")
               # print "alarm"
       
       if system == "Clust":
@@ -697,22 +745,40 @@ def detectionPhase():
                     if detc[c][b][a] <= lern[c][b][a]['Med_avg'] + ((lern[c][b][a]['Q3_max']-lern[c][b][a]['Q1_min'])*1.0/2.0)+1 and detc[c][b][a] >= lern[c][b][a]['Med_avg'] - ((lern[c][b][a]['Q3_max']-lern[c][b][a]['Q1_min'])*1.0/2.0)-1:
                     # Is it within "Normal" Range?
                     
-                      # print "Completely Fine!"
                       pass
                     else:
                       # Outside of "Normal" Data (But nothing to be alarmed about)
                       print "[Warning] "+ system +": Potential to be anomaly"
-                      num_of_alarms += 0.25
+                      num_of_warns += 0.01
                   else:
-                    num_of_alarms += 1
-                    print("[Alarm] "+ system + ": out of bounds has been triggered." + str(detc[c][b][a] ) + " is outside range of [" + str(lern[c][b][a]['Q1_min']-2) +","+ str(lern[c][b][a]['Q3_max']+2) + "]")
+                    cont["pos"][c][b][a].append(detc[c][b][a])
+                    if len(cont["pos"][c][b][a]) > 4:
+                      q1,med,q3 = find_quarts(cont["pos"][c][b][a])
+                      if detc[c][b][a] >= q1 and detc[c][b][a] <= q3:
+                        continue
+                    num_of_warns += 0.15
+                    print("[Warning] "+ system + ": out of bounds has been triggered." + str(detc[c][b][a] ) + " is outside range of [" + str(lern[c][b][a]['Q1_min']-2) +","+ str(lern[c][b][a]['Q3_max']+2) + "]")
             else:
-              print ("[Alarm] " + system + " : number of clusters." + str(tempLearned) + " does not equal " + str(len(detc[c][b]))) 
-              num_of_alarms += 1
-              
-    if num_of_alarms >= 15:
-      alarm("[Alarm] Potential Attack Happening!!")
-            
+              print ("[Warning] " + system + " : number of clusters." + str(tempLearned) + " does not equal " + str(len(detc[c][b]))) 
+              num_of_warns += 0.3
+    
+    did_alarm = 3
+    if num_of_warns >= 15:
+      print "ALARM at: " + str(line_count) + " actually: " + str(contLearn["hist"][1]) + " at score: " + str(num_of_warns)
+      # alarm("[Alarm] Potential Attack Happening!!")
+      did_alarm = 1
+    else:
+      print "No alarm at: " + str(line_count) + " actually: " + str(contLearn["hist"][1]) + " at score: " + str(num_of_warns)
+      # alarm("[CLEAR] No attack happening!!")
+      for system in ["Intra", "Inter", "Corr", "Clust"]:
+        for i in contnTempt[system]:
+          contLearn[system]["score"]["neg"].append(i)
+      did_alarm = 0
+      
+    with open("files/output", "a+") as csvf:
+      w = csv.writer(csvf,delimiter=',',quotechar='"',quoting=csv.QUOTE_MINIMAL)
+      w.writerow([str(line_count),did_alarm, str(contLearn["hist"][1]), str(num_of_warns)])
+          
     # print detectionPhaseDict
 
   
