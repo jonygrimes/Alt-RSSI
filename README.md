@@ -22,8 +22,10 @@ This program collects RSSI signals at different attenna gain strengths that you 
 To properly test this, you should ensure that your computer has a wireless interface that can be put into promiscous mode and that your computer has hostapd:
 `sudo apt install hostapd`
 
-To begin, you will need to set your antenna into promiscuous by running the following:
-`airmon-ng start [your wireless interface]`
+Also, please make sure to start hostapd (an example config file can be found [here](https://www.cberner.com/2013/02/03/using-hostapd-on-ubuntu-to-create-a-wifi-access-point/)):
+`sudo hostapd [config file]`
+
+Ensure that a client is connected to your newly created access point.
 
 Then, you can start RSSI-scan.py by using the following:
 `python RSSI-scan.py -m [client MAC address] -d [list of dBm you wish to run at] -i [raw (un-promiscuous) interface] -p [promiscuous interface]`
