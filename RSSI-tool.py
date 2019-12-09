@@ -91,7 +91,7 @@ def findFile():
   while True:
     if not os.path.exists('files/scan-total.csv'):
       if wait:
-        print "This script is supposed to be run after the first 30 inputs from the scan.py script have been generated\nPlease wait while the system finds the file.\nWaiting"
+        print "This script is supposed to be run after the first 30 inputs from the scan.py script have been generated\nPlease wait while the method finds the file.\nWaiting"
         wait = False
       else: print ".",
       time.sleep(0.5)
@@ -99,7 +99,7 @@ def findFile():
       if sum(1 for line in open('files/scan-total.csv')) >= 30: return
       else:
         if wait:
-          print "This script is supposed to be run after the first 30 inputs from the scan.py script have been generated\nPlease wait while the system finds the file.\nWaiting"
+          print "This script is supposed to be run after the first 30 inputs from the scan.py script have been generated\nPlease wait while the method finds the file.\nWaiting"
           wait = False
         else: print "*",
         time.sleep(0.5)
@@ -278,7 +278,7 @@ def DBSCAN_clustering_alg(l):
   min_samp_count = np.ceil(len(l)/episode)
 
   #sanity checks for parameters
-  if (min_samp_count<0):
+  if (min_samp_count<1):
     min_samp_count=1
   if (episode<1):
     episode = 1
@@ -351,13 +351,13 @@ def learningPhase():
   
   totalIterations = 4
   
-  for system in ["Intra", "Inter", "Corr", "Clust"]:
+  for method in ["Intra", "Inter", "Corr", "Clust"]:
       learningPhaseDict[system] = dict()
       learningPhaseDict[system]["score"] = dict()
   
   for iteration in range(totalIterations):
   
-    for system in ["Intra", "Inter", "Corr", "Clust"]:
+    for method in ["Intra", "Inter", "Corr", "Clust"]:
       normalProfile[Phase][system] = dict()
       for key in ["hist", "score", "diff"]:
         normalProfile[Phase][system][key] = dict()
@@ -416,7 +416,7 @@ def learningPhase():
     DBmCorrelation(len(normalProfile[Phase]["Intra"]["hist"]), Phase)
     DBmClusterization(len(normalProfile[Phase]["Intra"]["hist"]), Phase)
     
-    for system in ["Intra", "Inter", "Corr", "Clust"]:
+    for method in ["Intra", "Inter", "Corr", "Clust"]:
       learningPhaseDict[system][iteration] = normalProfile[Phase][system]["score"]
       
     set = str(int(set) + 1)
@@ -431,16 +431,16 @@ def learningPhase():
   # [ [[Q1,Median,Q3] * # of perm] * iterations ]  <-- Inter
   # [ [[Q1,Median,Q3] * # of dBm ] * iterations ]   <-- Corr
   
-  for system in ["Intra","Inter","Corr"]: 
+  for method in ["Intra","Inter","Corr"]: 
     for perm in range(len(learningPhaseDict[system][0])):
       learningPhaseDict[system]["score"][perm] = dict()
       for a in ["Q1","Med","Q3"]:
         for b in [["_avg",0],["_max",0],["_min",999]]:
-          if system == "Intra":
+          if method == "Intra":
             learningPhaseDict[system]["score"][a+b[0]] = b[1]
           else:
             learningPhaseDict[system]["score"][perm][a+b[0]] = b[1]
-      if system == "Intra":
+      if method == "Intra":
         break
           
           
@@ -476,7 +476,7 @@ def learningPhase():
   # -=-=-=-=-=-=-=-=-=-=-=-=-
 
   # Find min, max, and avearge for Q1,Med, and Q3 (Used for threshold values later)
-  for system in ["Inter","Corr"]: 
+  for method in ["Inter","Corr"]: 
     for i in range(totalIterations):
       iteration = learningPhaseDict[system][i]
       for perm in range(len(iteration)):
@@ -532,12 +532,12 @@ def detectionPhase():
       detectionPhaseDict[system]["score"][perm] = dict()
       for a in ["Q1","Med","Q3"]:
         for b in [["_avg",0],["_max",0],["_min",999]]:
-          if system == "Intra":
+          if method == "Intra":
             print "INTRA"
             detectionPhaseDict[system]["score"][a+b[0]] = b[1]
           else:
             detectionPhaseDict[system]["score"][perm][a+b[0]] = b[1]
-      if system == "Intra":
+      if method == "Intra":
         break
   
   latestClock=0
@@ -550,7 +550,7 @@ def detectionPhase():
   detectionPhaseDict = dict()
   contLearn = dict()
   
-  for system in ["Intra", "Inter", "Corr", "Clust"]:
+  for method in ["Intra", "Inter", "Corr", "Clust"]:
       detectionPhaseDict[system] = dict()
       detectionPhaseDict[system]["score"] = dict()
       contLearn[system] = dict()
@@ -558,15 +558,15 @@ def detectionPhase():
       contLearn[system]["score"]["pos"] = dict()
       contLearn[system]["score"]["neg"] = []
       for i in ["pos"]:
-        if system == "Intra":
+        if method == "Intra":
           for a in [0,1,2]:
             contLearn[system]["score"][i][a] = []
-        if system in ["Inter","Corr"]:
+        if method in ["Inter","Corr"]:
           for b in range(len(learningPhaseDict[system]["score"])):
             contLearn[system]["score"][i][b] = dict()
             for a in [0,1,2]:
               contLearn[system]["score"][i][b][a] = []
-        if system in ["Clust"]:
+        if method in ["Clust"]:
           for c in range(len(learningPhaseDict[system]["score"])):
             contLearn[system]["score"][i][c] = dict()
             for b in [0,1,2]:
@@ -580,7 +580,7 @@ def detectionPhase():
   while True:
 
   
-    for system in ["Intra", "Inter", "Corr", "Clust"]:
+    for method in ["Intra", "Inter", "Corr", "Clust"]:
       normalProfile[Phase][system] = dict()
       for key in ["hist", "score", "diff"]:
         normalProfile[Phase][system][key] = dict()
@@ -640,8 +640,12 @@ def detectionPhase():
       # How much should samples within the same timestamp change?
     # for i in range(len(normalProfile[Phase]["Intra"]["diff"])):
       # print normalProfile[Phase]["Intra"]["diff"]
-    normalProfile[Phase]["Intra"]["score"] = find_quarts(sorted(normalProfile[Phase]["Intra"]["diff"]))
-    
+      
+    try:
+      normalProfile[Phase]["Intra"]["score"] = find_quarts(sorted(normalProfile[Phase]["Intra"]["diff"]))
+    except:
+      continue
+      
     # InterTimestamp Functionality
       # How much should samples change from timestamp to the next?
     for i in range(len(normalProfile[Phase]["Inter"]["diff"])):
@@ -650,7 +654,7 @@ def detectionPhase():
     DBmCorrelation(len(normalProfile[Phase]["Intra"]["hist"]), Phase)
     DBmClusterization(len(normalProfile[Phase]["Intra"]["hist"]), Phase)
     
-    for system in ["Intra", "Inter", "Corr", "Clust"]:
+    for method in ["Intra", "Inter", "Corr", "Clust"]:
       detectionPhaseDict[system] = normalProfile[Phase][system]["score"]
       
     set = str(int(set) + 1)
@@ -662,14 +666,16 @@ def detectionPhase():
     
     
     contnTempt = dict()
-    for system in ["Intra", "Inter", "Corr", "Clust"]:
+    for method in ["Intra", "Inter", "Corr", "Clust"]:
+      '''  Scoring Function '''
+      
       detc = detectionPhaseDict[system]
       lern = learningPhaseDict[system]["score"]     
       cont = contLearn[system]["score"]
       contnTempt[system] = []
       contn = contnTempt[system]
       
-      if system == "Intra":
+      if method == "Intra":
         # [Q1,Median,Q3]                 <-- Intra
         for a in [0,1,2]:
           
@@ -685,7 +691,7 @@ def detectionPhase():
                   continue
               
               # Outside of "Normal" Data (But nothing to be alarmed about)
-              print "[Warning] "+ system +": Potential to be anomaly"
+              print "[Warning] "+ method +": Potential to be anomaly"
               num_of_warns += 0.25
           else:
             contn.append(detc[a])
@@ -695,9 +701,9 @@ def detectionPhase():
                 continue
 
             num_of_warns += 1
-            print("[Warning] "+ system + ": out of bounds has been triggered." + str(detc[a]) + " is outside range of [" + str(lern['Q1_min'] -2) +","+ str(lern['Q3_max']+2) + "]")
+            print("[Warning] "+ method + ": out of bounds has been triggered." + str(detc[a]) + " is outside range of [" + str(lern['Q1_min'] -2) +","+ str(lern['Q3_max']+2) + "]")
             
-      if system in ["Inter","Corr"]:
+      if method in ["Inter","Corr"]:
         # [[Q1,Median,Q3] * # of perm ]  <-- Inter
         # [[Q1,Median,Q3] * # of dBm  ]  <-- Corr
         for b in range(len(lern)):
@@ -714,7 +720,7 @@ def detectionPhase():
                   if detc[b][a] >= q1 and detc[b][a] <= q3:
                     continue
                 # Outside of "Normal" Data (But nothing to be alarmed about)
-                print "[Warning] "+ system +": Potential to be anomaly"
+                print "[Warning] "+ method +": Potential to be anomaly"
                 num_of_warns += 0.25
             else:
               contn.append(detc[b][a])
@@ -723,10 +729,10 @@ def detectionPhase():
                 if detc[a] >= q1 and detc[a] <= q3:
                   continue
               num_of_warns += 1
-              print("[Warning] "+ system + ": out of bounds has been triggered." + str(detc[b][a]) + " is outside range of [" + str(lern[b]['Q1_min'] -2) +","+ str(lern[b]['Q3_max']+2) + "]")
+              print("[Warning] "+ method + ": out of bounds has been triggered." + str(detc[b][a]) + " is outside range of [" + str(lern[b]['Q1_min'] -2) +","+ str(lern[b]['Q3_max']+2) + "]")
               # print "alarm"
       
-      if system == "Clust":
+      if method == "Clust":
         #  [[[ # in clust 1, ... * # of clust], [avg # of points], [mean for clust 1, ... * # of clust]] * # of dBms ]    <-- Cluster
         
         for c in range(len(lern)): # c'th dBm level
@@ -748,7 +754,7 @@ def detectionPhase():
                       pass
                     else:
                       # Outside of "Normal" Data (But nothing to be alarmed about)
-                      print "[Warning] "+ system +": Potential to be anomaly"
+                      print "[Warning] "+ method +": Potential to be anomaly"
                       num_of_warns += 0.01
                   else:
                     cont["pos"][c][b][a].append(detc[c][b][a])
@@ -757,9 +763,9 @@ def detectionPhase():
                       if detc[c][b][a] >= q1 and detc[c][b][a] <= q3:
                         continue
                     num_of_warns += 0.15
-                    print("[Warning] "+ system + ": out of bounds has been triggered." + str(detc[c][b][a] ) + " is outside range of [" + str(lern[c][b][a]['Q1_min']-2) +","+ str(lern[c][b][a]['Q3_max']+2) + "]")
+                    print("[Warning] "+ method + ": out of bounds has been triggered." + str(detc[c][b][a] ) + " is outside range of [" + str(lern[c][b][a]['Q1_min']-2) +","+ str(lern[c][b][a]['Q3_max']+2) + "]")
             else:
-              print ("[Warning] " + system + " : number of clusters." + str(tempLearned) + " does not equal " + str(len(detc[c][b]))) 
+              print ("[Warning] " + method + " : number of clusters." + str(tempLearned) + " does not equal " + str(len(detc[c][b]))) 
               num_of_warns += 0.3
     
     did_alarm = 3
@@ -770,7 +776,7 @@ def detectionPhase():
     else:
       print "No alarm at: " + str(line_count) + " actually: " + str(contLearn["hist"][1]) + " at score: " + str(num_of_warns)
       # alarm("[CLEAR] No attack happening!!")
-      for system in ["Intra", "Inter", "Corr", "Clust"]:
+      for method in ["Intra", "Inter", "Corr", "Clust"]:
         for i in contnTempt[system]:
           contLearn[system]["score"]["neg"].append(i)
       did_alarm = 0
@@ -798,7 +804,7 @@ if __name__ == '__main__':
   # global variables for models
   for i in ["learning","detection"]:
     normalProfile[i] = dict()
-    for system in ["Intra", "Inter", "Corr", "Clust"]:
+    for method in ["Intra", "Inter", "Corr", "Clust"]:
       normalProfile[i][system] = dict()
       for key in ["hist", "score", "diff"]:
         normalProfile[i][system][key] = dict()
